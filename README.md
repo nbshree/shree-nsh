@@ -1,36 +1,165 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 逆水寒手游 · 内功计算器
 
-## Getting Started
+一个用于计算逆水寒手游进攻团内功评分的Web应用，支持上传截图自动解析属性数值并计算评分。
 
-First, run the development server:
+## 功能特性
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### 单个计算器
+- 手动输入各项属性数值计算评分
+- 上传截图自动解析属性
+- 图片裁剪功能，可框选需要解析的区域
+- 实时计算收益百分比和评分
+- 一线牵加成计算
+- 评分等级评价显示
+
+### 对比计算器
+- 批量上传多张截图
+- 每张图片可单独裁剪
+- 自动识别内功名字（总和面板或单个内功）
+- 并行解析，持续上传不阻塞
+- 结果按分数排序显示
+- 最高分高亮标记
+- 分数差距统计
+
+## 技术栈
+
+- **框架**: Next.js 16 (App Router)
+- **语言**: TypeScript
+- **样式**: Tailwind CSS
+- **AI服务**: 阿里云 Coding API (kimi-k2.5)
+
+## 项目结构
+
+```
+neigong-calculator/
+├── src/
+│   ├── app/
+│   │   ├── page.tsx              # 单个计算器页面
+│   │   ├── compare/page.tsx      # 对比计算器页面
+│   │   ├── api/parse-image/route.ts  # AI解析API
+│   │   └── globals.css           # 全局样式
+│   ├── components/
+│   │   ├── ImageCropper.tsx      # 图片裁剪组件
+│   │   ├── BatchImageModal.tsx   # 批量图片管理弹窗
+│   │   ├── ImageUpload.tsx       # 单图上传组件
+│   │   └── MultiImageUpload.tsx  # 多图上传组件
+│   └── lib/
+│       ├── constants.ts          # 属性配置和类型定义
+│       ├── calculator.ts         # 计算逻辑
+│       └── imageCompress.ts      # 图片压缩工具
+├── .env.local                    # 环境变量配置
+└── package.json
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 配置说明
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 环境变量
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+在 `.env.local` 文件中配置：
 
-## Learn More
+```env
+# 阿里云 Coding API 配置
+ALIYUN_API_BASE_URL=https://coding.dashscope.aliyuncs.com/v1
+ALIYUN_API_KEY=your_api_key_here
+ALIYUN_MODEL=kimi-k2.5
+```
 
-To learn more about Next.js, take a look at the following resources:
+### 计算参数
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+属性收益计算基于Excel提取的参数（`src/lib/constants.ts`）：
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| 属性 | 满数值 | 基础收益 |
+|------|--------|----------|
+| 破防 | 2323 | 0.97% |
+| 攻击 | 1586 | 1.25% |
+| 最大最小攻击 | 2076 | 0.82% |
+| 力量/气海 | 256 | 1.16% |
+| 会心 | 807 | 0.75% |
+| 命中 | 681 | 1.00% |
+| 全元素攻 | 942 | 0.85% |
+| 流派元素攻 | 779 | 0.62% |
+| 身法 | 256 | 0.71% |
+| 根骨 | 96 | 0.25% |
+| 耐力 | 1 | 0.20% |
+| 内外功克制 | 1178 | 0.17% |
 
-## Deploy on Vercel
+评分规则：100分 = 1%收益，一线牵加成系数 = 1.07
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 使用方式
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 开发环境
+
+```bash
+# 安装依赖
+npm install
+
+# 启动开发服务器
+npm run dev
+```
+
+访问 http://localhost:3000
+
+### 使用流程
+
+1. **单个计算器**：
+   - 上传截图 → 裁剪解析区域 → AI自动解析 → 计算评分
+   - 或手动输入属性数值 → 点击计算评分
+
+2. **对比计算器**：
+   - 上传多张截图 → 批量管理弹窗 → 单独裁剪或使用原图 → 确认上传
+   - 图片自动添加到列表并开始解析
+   - 解析完成后按分数排序显示
+
+### 评分等级参考
+
+| 分数范围 | 评价 |
+|----------|------|
+| ≥6300 | 拆道万古如长夜 |
+| ≥6000 | 世间无我这般人 |
+| ≥5800 | 手握日月拆星辰 |
+| ≥5300 | 拆之巅、傲世间 |
+| ≥4800 | 塔已有取死之道 |
+| ≥4100 | 饮水机管理员 |
+| <4100 | 疑似伪人 |
+
+## API接口
+
+### POST /api/parse-image
+
+上传图片解析属性数值。
+
+**请求**: FormData，包含 `image` 字段（图片文件）
+
+**响应**:
+```json
+{
+  "success": true,
+  "data": {
+    "内功名字": "总和",
+    "破防": 3440,
+    "攻击": 3018,
+    "最大最小攻击": 3731,
+    "力量气海": 417,
+    "会心": 896,
+    "命中": 1188,
+    "全元素攻": 917,
+    "流派元素攻": 300,
+    "身法": 0,
+    "根骨": 133,
+    "耐力": 0,
+    "内外功克制": 1088
+  }
+}
+```
+
+## 图片处理
+
+- **压缩**: 上传前自动压缩图片（最大1280×720，质量80%）
+- **裁剪**: Canvas实现框选裁剪功能
+- **格式**: 输出JPEG格式
+
+## 作者
+
+表格作者：满天丶星河
+数据参考：风何往，折字计算器
+表格优化：休寒
