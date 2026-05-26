@@ -92,6 +92,94 @@ export default function ComparePage() {
     }
   }, [handleFilesSelect]);
 
+  // 粘贴图片处理 - 跳过裁剪直接使用原图
+  const handlePaste = useCallback(async (e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        e.preventDefault();
+        const file = items[i].getAsFile();
+        if (!file) return;
+
+        const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const previewUrl = URL.createObjectURL(file);
+
+        // 添加loading状态
+        setResults(prev => [...prev, {
+          id,
+          previewUrl,
+          name: '解析中...',
+          status: 'loading',
+        }]);
+
+        // 压缩并解析
+        let finalFile = file;
+        try {
+          finalFile = await compressImage(file);
+        } catch {
+          // 使用原文件
+        }
+
+        try {
+          const formData = new FormData();
+          formData.append('image', finalFile);
+
+          const response = await fetch('/api/parse-image', {
+            method: 'POST',
+            body: formData,
+          });
+
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.error || '解析失败');
+          }
+
+          const attributes: ParseResult = data.data;
+          const calculation = calculateAllAttributes(attributes);
+          const evaluation = getEvaluation(calculation.totalScore);
+
+          setResults(prev =>
+            prev.map(item =>
+              item.id === id
+                ? {
+                    ...item,
+                    name: attributes.内功名字 || '未知',
+                    attributes,
+                    calculation,
+                    evaluation,
+                    status: 'done',
+                  }
+                : item
+            )
+          );
+        } catch (error) {
+          console.error('解析错误:', error);
+          setResults(prev =>
+            prev.map(item =>
+              item.id === id
+                ? {
+                    ...item,
+                    name: '解析失败',
+                    status: 'error',
+                    error: error instanceof Error ? error.message : '解析失败',
+                  }
+                : item
+            )
+          );
+        }
+        break;
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [handlePaste]);
+
   // 批量确认上传 - 添加到结果列表（loading状态），然后逐个解析
   const handleBatchConfirm = useCallback(async (items: { file: File; previewUrl: string; id: string }[]) => {
     setShowBatchModal(false);
@@ -224,10 +312,6 @@ export default function ComparePage() {
     setResults(prev => prev.filter(r => r.id !== id));
   }, []);
 
-  // 最高分（只计算done状态的）
-  const doneResults = results.filter(r => r.status === 'done' && r.calculation);
-  const maxScore = doneResults.length > 0 ? Math.max(...doneResults.map(r => r.calculation!.totalScore)) : 0;
-
   // 点击预览
   const handleImagePreview = useCallback((url: string) => {
     setModalImageUrl(url);
@@ -302,7 +386,7 @@ export default function ComparePage() {
             <div className="text-center">
               <div className="text-4xl mb-2">📷</div>
               <p className="text-gray-300 text-sm mb-1">
-                点击或拖拽上传内功属性截图
+                点击、拖拽或 Ctrl+V 粘贴上传内功属性截图
               </p>
               <p className="text-gray-400 text-xs">
                 可持续上传，已上传的图片会显示在下方列表中
@@ -330,7 +414,6 @@ export default function ComparePage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-white/20">
-                    <th className="py-2 px-2 text-left text-gray-300 w-12">排名</th>
                     <th className="py-2 px-2 text-left text-gray-300 w-16">截图</th>
                     <th className="py-2 px-2 text-left text-gray-300 w-16">内功</th>
                     <th className="py-2 px-2 text-left text-gray-300">总分</th>
@@ -351,24 +434,12 @@ export default function ComparePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {/* 先显示已完成的结果（按分数排序） */}
-                  {doneResults
-                    .sort((a, b) => b.calculation!.totalScore - a.calculation!.totalScore)
-                    .map((result, index) => (
+                  {/* 按上传顺序显示 */}
+                  {results.filter(r => r.status === 'done').map((result) => (
                       <tr
                         key={result.id}
-                        className={`border-b border-white/10 ${
-                          result.calculation!.totalScore === maxScore
-                            ? 'bg-yellow-500/10'
-                            : 'bg-white/5'
-                        }`}
+                        className="border-b border-white/10 bg-white/5"
                       >
-                        <td className="py-1.5 px-2">
-                          <span className="font-bold text-white text-xs"># {index + 1}</span>
-                          {result.calculation!.totalScore === maxScore && (
-                            <span className="ml-1 text-yellow-400">★</span>
-                          )}
-                        </td>
                         <td className="py-1.5 px-2">
                           <img
                             src={result.previewUrl}
@@ -414,16 +485,14 @@ export default function ComparePage() {
                       className="border-b border-white/10 bg-white/5"
                     >
                       <td className="py-1.5 px-2">
-                        <span className="font-bold text-gray-400 text-xs">-</span>
-                      </td>
-                      <td className="py-1.5 px-2">
                         <div className="relative">
                           <img
                             src={result.previewUrl}
                             alt="解析中"
-                            className="w-14 h-10 object-cover rounded"
+                            className="w-14 h-10 object-cover rounded cursor-pointer hover:opacity-80"
+                            onClick={() => handleImagePreview(result.previewUrl)}
                           />
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded">
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded pointer-events-none">
                             <div className="animate-spin text-lg">⚙️</div>
                           </div>
                         </div>
@@ -461,9 +530,6 @@ export default function ComparePage() {
                       key={result.id}
                       className="border-b border-white/10 bg-red-500/10"
                     >
-                      <td className="py-1.5 px-2">
-                        <span className="font-bold text-red-400 text-xs">!</span>
-                      </td>
                       <td className="py-1.5 px-2">
                         <img
                           src={result.previewUrl}
@@ -504,15 +570,6 @@ export default function ComparePage() {
               </table>
             </div>
 
-            {/* 分数差距 */}
-            {doneResults.length >= 2 && (
-              <div className="mt-3 p-2 bg-white/5 rounded text-sm text-gray-300">
-                最高分与最低分差距：
-                <span className="text-purple-300 font-bold ml-1">
-                  {Math.round(maxScore - Math.min(...doneResults.map(r => r.calculation!.totalScore)))} 分
-                </span>
-              </div>
-            )}
           </div>
         )}
 

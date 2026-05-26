@@ -24,3 +24,6 @@ lerna-debug.log*
 .tmp
 .vscode
 .idea
+.env.local
+.next
+next-env.d.ts

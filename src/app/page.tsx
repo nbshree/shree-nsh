@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   OutputAttributes,
@@ -102,6 +102,65 @@ export default function Home() {
       handleFileSelect(file);
     }
   }, [handleFileSelect]);
+
+  // 粘贴图片处理 - 跳过裁剪直接使用原图
+  const handlePaste = useCallback(async (e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        e.preventDefault();
+        const file = items[i].getAsFile();
+        if (!file) return;
+
+        // 直接使用原图，跳过裁剪
+        const url = URL.createObjectURL(file);
+        setPreviewUrl(url);
+        setIsProcessing(true);
+        setParseError(null);
+
+        try {
+          let finalFile = file;
+          try {
+            finalFile = await compressImage(file);
+          } catch {
+            // 使用原文件
+          }
+
+          const formData = new FormData();
+          formData.append('image', finalFile);
+
+          const response = await fetch('/api/parse-image', {
+            method: 'POST',
+            body: formData,
+          });
+
+          const data = await response.json();
+
+          if (!response.ok || !data.success) {
+            throw new Error(data.error || '解析失败');
+          }
+
+          setAttributes(prev => ({
+            ...prev,
+            ...data.data,
+          }));
+        } catch (error) {
+          console.error('解析错误:', error);
+          setParseError(error instanceof Error ? error.message : '图片解析失败，请重试');
+        } finally {
+          setIsProcessing(false);
+        }
+        break;
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [handlePaste]);
 
   // 裁剪完成，上传AI解析
   const handleCropComplete = useCallback(async (croppedFile: File) => {
@@ -264,7 +323,7 @@ export default function Home() {
               <div className="text-center">
                 <div className="text-5xl mb-3">📷</div>
                 <p className="text-gray-300 mb-2">
-                  点击或拖拽上传内功属性截图
+                  点击、拖拽或 Ctrl+V 粘贴上传内功属性截图
                 </p>
                 <p className="text-gray-400 text-xs">
                   上传后可裁剪解析区域
